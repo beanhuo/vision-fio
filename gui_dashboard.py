@@ -9,7 +9,7 @@ from datetime import datetime
 # Constants
 VF_COUNT = 4
 VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
-MAX_HISTORY = 1000
+MAX_HISTORY = 100
 COLORS = ['#081075', '#801d0b', '#08a608', '#f2dc49']
 DARK_COLORS = ['#081075', '#801d0b', '#08a608', '#f2dc49']
 
@@ -43,9 +43,9 @@ st.markdown("""
         /* Title styling */
         .dashboard-title {
             font-size: 2.5rem;
-            font-weight: 700;
+            font-weight: 600;
             text-align: center;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.1rem;
             background: linear-gradient(to right, #4A90E2, #6A5ACD);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
