@@ -10,10 +10,10 @@ from datetime import datetime
 VF_COUNT = 4
 VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
 MAX_HISTORY = 100
-COLORS = ['#081075', '#801d0b', '#08a608', '#f2dc49']
-DARK_COLORS = ['#081075', '#801d0b', '#08a608', '#f2dc49']
+COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
+DARK_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
 
-# 🎨 Dark Theme Page Setup
+# 🎨 Modern Dark Theme Page Setup
 st.set_page_config(
     page_title="NVMe VF Performance Dashboard",
     layout="wide",
@@ -21,80 +21,123 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ✨ Dark Theme CSS Styling
+# ✨ Enhanced Dark Theme CSS Styling
 st.markdown("""
     <style>
         /* Main background - Dark Theme */
         .stApp {
-            background-color: #121212;
-            color: #ffffff;
+            background-color: #0E1117;
+            color: #FAFAFA;
         }
 
-        /* Card styling - Dark Cards */
+        /* Improved card styling */
         .metric-card {
-            background: #1E1E1E;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            border-left: 4px solid #4A90E2;
+            background: #1E2130;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+            border-left: 4px solid;
             color: white;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 100%;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.4);
         }
 
         /* Title styling */
         .dashboard-title {
-            font-size: 2.5rem;
-            font-weight: 600;
+            font-size: 2.2rem;
+            font-weight: 700;
             text-align: center;
-            margin-bottom: 0.1rem;
+            margin-bottom: 0.5rem;
             background: linear-gradient(to right, #4A90E2, #6A5ACD);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            padding: 0.5rem;
+            border-radius: 8px;
         }
 
-        /* Subheader styling */
+        /* Section headers */
         .section-header {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: 600;
             color: #E0E0E0;
-            margin-top: 1.5rem;
-            margin-bottom: 1rem;
-            border-bottom: 2px solid #333333;
-            padding-bottom: 0.5rem;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.3rem;
+            border-bottom: 1px solid #2E3241;
         }
 
         /* Sidebar styling */
         .sidebar .sidebar-content {
-            background: linear-gradient(180deg, #121212 0%, #0A0A0A 100%);
+            background: #131720;
             color: white;
-            border-right: 1px solid #333;
+            border-right: 1px solid #2E3241;
+        }
+
+        /* Tab styling */
+        .stTabs [role="tablist"] {
+            background: #1E2130;
+            border-radius: 8px;
+            padding: 4px;
+        }
+
+        .stTabs [role="tab"] {
+            border-radius: 6px;
+            padding: 8px 16px;
+            transition: all 0.3s ease;
+        }
+
+        .stTabs [role="tab"][aria-selected="true"] {
+            background: #4A90E2;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Compact layout adjustments */
+        .stDataFrame {
+            font-size: 0.9rem;
+        }
+
+        /* Footer styling */
+        .footer {
+            font-size: 0.8rem;
+            color: #7E8AA2;
+            text-align: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #2E3241;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# 🏁 Dashboard Header
+# 🏁 Compact Dashboard Header
 st.markdown("""
     <div style="text-align:center; margin-bottom:0.5rem;">
-        <h1 class="dashboard-title">Real-Time NVMe Performance Dashboard</h1>
+        <h1 class="dashboard-title">NVMe VF Performance Dashboard</h1>
     </div>
 """, unsafe_allow_html=True)
 
-# 🎮 Sidebar Controls
+# 🎮 Compact Sidebar Controls
 with st.sidebar:
     st.markdown("""
-        <div style="text-align:center; margin-bottom:2rem;">
-            <h2 style="color:white;">⚙️ Control Panel</h2>
+        <div style="text-align:center; margin-bottom:1rem;">
+            <h2 style="color:white; font-size:1.3rem;">⚙️ Dashboard Controls</h2>
         </div>
     """, unsafe_allow_html=True)
 
-    refresh_rate = st.slider("🔄 Refresh rate (seconds)", 1, 10, 3)
-    show_raw_data = st.checkbox("📝 Show raw data", False)
-    show_avg_data = st.toggle("📊 Show Average Data (vs Current)", value=True)
+    refresh_rate = st.slider("🔄 Refresh rate (seconds)", 1, 10, 3, help="Adjust how often the dashboard updates")
+    show_raw_data = st.checkbox("📝 Show raw data", False, help="Display raw performance data table")
+    show_avg_data = st.toggle("📊 Show Average Data", value=True, help="Toggle between current and average IOPS display")
 
     st.markdown("---")
     st.markdown("""
-        <div style="text-align:center; color:#808080;">
-            <small>NVMe Performance Monitor v2.1</small><br>
-            <small>Last updated: {}</small>
+        <div style="font-size:0.8rem; color:#7E8AA2; text-align:center;">
+            <p><strong>NVMe Performance Monitor v2.2</strong></p>
+            <p>Last updated: {}</p>
         </div>
     """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), unsafe_allow_html=True)
 
@@ -109,75 +152,122 @@ if "timestamps" not in st.session_state:
     st.session_state.timestamps = []
 if "last_valid_iops" not in st.session_state:
     st.session_state.last_valid_iops = [0.0] * VF_COUNT
+if "last_valid_metrics" not in st.session_state:
+    st.session_state.last_valid_metrics = [None] * VF_COUNT
 if "data_valid" not in st.session_state:
     st.session_state.data_valid = [False] * VF_COUNT
 
 # Trigger auto-refresh
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
-
 # Safe division function
 def safe_divide(numerator, denominator):
     return numerator / denominator if denominator != 0 else 0
-
 
 # IOPS file reader with enhanced error handling and last valid value tracking
 def read_iops(file_path, vf_index):
     try:
         if not os.path.exists(file_path):
             st.warning(f"⚠️ {file_path} does not exist")
-            return None
+            return None, None
         if os.path.getsize(file_path) == 0:
-            #st.warning(f"⚠️ {file_path} is empty")
             print(f"⚠️ {file_path} is empty")
-            return None
+            return None, None
 
         with open(file_path) as f:
             data = json.load(f)
             if 'jobs' in data:
-                iops = data['jobs'][0]['read']['iops']
-            elif 'iops' in data:
-                iops = data['iops']
-            elif 'read' in data:
-                iops = data['read']['iops']
-            else:
-                st.warning(f"⚠️ No 'jobs', 'iops', or 'read' key found in {file_path}")
-                return None
+                job_data = data['jobs'][0]
+                iops = job_data['read']['iops']
+                bw = job_data['read']['bw'] / 1024  # Convert KB to MB
+                lat_mean = job_data['read']['clat_ns']['mean'] / 1e6  # ns to ms
+                p99_lat = job_data['read']['clat_ns']['percentile']['99.000000'] / 1e6
+                cpu_usr = job_data['usr_cpu']
+                cpu_sys = job_data['sys_cpu']
+                iodepth_util = job_data['iodepth_level'].get('>=64', 0)
 
-            if iops > 0:  # Only update last valid if we got a positive value
+                metrics = {
+                    'iops': iops,
+                    'bw': bw,
+                    'lat_mean': lat_mean,
+                    'p99_lat': p99_lat,
+                    'cpu_usr': cpu_usr,
+                    'cpu_sys': cpu_sys,
+                    'iodepth_util': iodepth_util
+                }
+            else:
+                st.warning(f"⚠️ No 'jobs' key found in {file_path}")
+                return None, None
+
+            if iops > 0:
                 st.session_state.last_valid_iops[vf_index] = iops
+                st.session_state.last_valid_metrics[vf_index] = metrics
                 st.session_state.data_valid[vf_index] = True
-            return iops
+            return iops, metrics
 
     except Exception as e:
         st.warning(f"⚠️ Error reading {file_path}: {str(e)}")
-        return None
+        return None, None
 
+# Initialize additional session state variables
+if "total_bw" not in st.session_state:
+    st.session_state.total_bw = [0.0] * VF_COUNT
+if "total_lat" not in st.session_state:
+    st.session_state.total_lat = [0.0] * VF_COUNT
+if "total_p99lat" not in st.session_state:
+    st.session_state.total_p99lat = [0.0] * VF_COUNT
+if "total_cpu_usr" not in st.session_state:
+    st.session_state.total_cpu_usr = [0.0] * VF_COUNT
+if "total_cpu_sys" not in st.session_state:
+    st.session_state.total_cpu_sys = [0.0] * VF_COUNT
+if "total_iodepth_util" not in st.session_state:
+    st.session_state.total_iodepth_util = [0.0] * VF_COUNT
 
-# Read current IOPS - returns None for invalid reads
+# Read current metrics
 current_iops = []
+current_metrics = []
 for i, f in enumerate(VF_FILES):
-    iops = read_iops(f, i)
-    if iops is not None:
+    iops, metrics = read_iops(f, i)
+    if iops is not None and metrics is not None:
         current_iops.append(iops)
+        current_metrics.append(metrics)
     else:
-        # Use last valid value if available, otherwise skip
         if st.session_state.data_valid[i]:
+            # Use last valid data if current data is invalid
             current_iops.append(st.session_state.last_valid_iops[i])
+            current_metrics.append(st.session_state.last_valid_metrics[i])
         else:
-            current_iops.append(0.0)  # Fallback to 0 if no valid data yet
+            current_iops.append(0.0)
+            current_metrics.append({
+                'iops': 0.0,
+                'bw': 0.0,
+                'lat_mean': 0.0,
+                'p99_lat': 0.0,
+                'cpu_usr': 0.0,
+                'cpu_sys': 0.0,
+                'iodepth_util': 0.0
+            })
 
-# Only update running totals if we have valid data for all VFs
-if all(st.session_state.data_valid):
+# Update running totals
+if any(st.session_state.data_valid):
     for i in range(VF_COUNT):
         st.session_state.total_iops[i] += current_iops[i]
+        st.session_state.total_bw[i] += current_metrics[i]['bw']
+        st.session_state.total_lat[i] += current_metrics[i]['lat_mean']
+        st.session_state.total_p99lat[i] += current_metrics[i]['p99_lat']
+        st.session_state.total_cpu_usr[i] += current_metrics[i]['cpu_usr']
+        st.session_state.total_cpu_sys[i] += current_metrics[i]['cpu_sys']
+        st.session_state.total_iodepth_util[i] += current_metrics[i]['iodepth_util']
         st.session_state.samples[i] += 1
 
-# Compute averages with safe division
-avg_iops = [
-    safe_divide(st.session_state.total_iops[i], st.session_state.samples[i])
-    for i in range(VF_COUNT)
-]
+# Compute averages
+avg_iops = [safe_divide(st.session_state.total_iops[i], st.session_state.samples[i]) for i in range(VF_COUNT)]
+avg_bw = [safe_divide(st.session_state.total_bw[i], st.session_state.samples[i]) for i in range(VF_COUNT)]
+avg_lat = [safe_divide(st.session_state.total_lat[i], st.session_state.samples[i]) for i in range(VF_COUNT)]
+avg_p99lat = [safe_divide(st.session_state.total_p99lat[i], st.session_state.samples[i]) for i in range(VF_COUNT)]
+avg_cpu_usr = [safe_divide(st.session_state.total_cpu_usr[i], st.session_state.samples[i]) for i in range(VF_COUNT)]
+avg_cpu_sys = [safe_divide(st.session_state.total_cpu_sys[i], st.session_state.samples[i]) for i in range(VF_COUNT)]
+avg_iodepth_util = [safe_divide(st.session_state.total_iodepth_util[i], st.session_state.samples[i]) for i in range(VF_COUNT)]
 
 # Append to history only if we have valid data
 if any(iops > 0 for iops in current_iops):
@@ -197,45 +287,45 @@ if total_avg_iops > 0:
 else:
     percentages = [0.0] * VF_COUNT
 
-# Main Metrics Display
+# =============================================
+# 🚀 Enhanced Main Dashboard Layout
+# =============================================
+
+# Main Metrics Display - Now with more metrics
 st.markdown("### 📊 Performance Summary")
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.markdown(f"""
-        <div class="metric-card" style="padding: 10px; margin: 5px;">
-            <h4 style="color:#4A90E2;font-size:1.2rem; margin-bottom: 0.5rem;">Current Total IOPS</h4>
-            <h2 style="color:#4A90E2; font-size:2.5rem;margin: 0;">{sum(current_iops):,.0f}</h2>
-            <p style="color:#B0B0B0; font-size:0.9rem; margin: 0;">Across all VFs</p>
-        </div>
-    """, unsafe_allow_html=True)
+cols = st.columns(4)
 
-with col2:
-    st.markdown(f"""
-        <div class="metric-card" style="padding: 10px; margin: 5px;">
-            <h4 style="color:#00CC96; font-size:1.2rem; margin-bottom: 0.5rem;">Average Total IOPS</h4>
-            <h2 style="color:#00CC96; font-size:2rem; margin: 0;">{total_avg_iops:,.0f}</h2>
-            <p style="color:#B0B0B0; font-size:0.9rem; margin: 0;">Since session start</p>
-        </div>
-    """, unsafe_allow_html=True)
+# Calculate summary metrics using current data (or last valid data if current is invalid)
+total_bw = sum(m['bw'] for m in current_metrics)
+avg_latency = safe_divide(sum(m['lat_mean'] for m in current_metrics), VF_COUNT)
+p99_latency = safe_divide(sum(m['p99_lat'] for m in current_metrics), VF_COUNT)
 
-with col3:
-    st.markdown(f"""
-        <div class="metric-card" style="padding: 10px; margin: 5px;">
-            <h4 style="color:#AB63FA; font-size:1.2rem; margin-bottom: 0.5rem;">Active VFs</h4>
-            <h2 style="color:#AB63FA; font-size:2rem; margin: 0;">{VF_COUNT}</h2>
-            <p style="color:#B0B0B0; font-size:0.9rem; margin: 0;">Monitored instances</p>
-        </div>
-    """, unsafe_allow_html=True)
+metric_config = [
+    {"title": "Current Total", "value": sum(current_iops), "color": "#4A90E2", "unit": "IOPS", "desc": "Across all VFs"},
+    {"title": "Throughput", "value": total_bw, "color": "#00CC96", "unit": "MB/s", "desc": "Total bandwidth"},
+    {"title": "Avg Latency", "value": avg_latency, "color": "#AB63FA", "unit": "ms", "desc": "Mean latency"},
+    {"title": "P99 Latency", "value": p99_latency, "color": "#FFA15A", "unit": "ms", "desc": "99th percentile"}
+]
 
-# Main Visualization Area - Modified to use the toggle
-st.markdown("### 📈 IOPS Distribution")
-tab1, tab2, tab3 = st.tabs(["Bar Chart", "Trend View", "Pie Chart"])
+for i, col in enumerate(cols):
+    with col:
+        metric = metric_config[i]
+        st.markdown(f"""
+            <div class="metric-card" style="border-left-color: {metric['color']}">
+                <h4 style="color:{metric['color']};font-size:1rem; margin-bottom: 0.3rem;">{metric['title']}</h4>
+                <h2 style="color:{metric['color']}; font-size:1.8rem;margin: 0;">{metric['value']:,.1f}{metric['unit']}</h2>
+                <p style="color:#B0B0B0; font-size:0.8rem; margin: 0;">{metric['desc']}</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+# Enhanced Visualization Tabs
+tab1, tab2, tab3, tab4, tab5= st.tabs(["IOPS", "Throughput", "Latency", "CPU/Queue", "IOPS Trend"])
 
 with tab1:
     fig = go.Figure()
-
-    # Use average or current data based on toggle
     display_data = avg_iops if show_avg_data else current_iops
+    display_percentages = percentages if show_avg_data else [
+        safe_divide(iops, sum(current_iops)) * 100 if sum(current_iops) > 0 else 0 for iops in current_iops]
 
     for i in range(VF_COUNT):
         fig.add_trace(go.Bar(
@@ -243,27 +333,125 @@ with tab1:
             y=[display_data[i]],
             name=vf_labels[i],
             marker_color=DARK_COLORS[i],
-            text=[f"{display_data[i]:,.0f}<br>({percentages[i]:.1f}%)"] if show_avg_data else [
-                f"{display_data[i]:,.0f}"],
+            text=[f"{display_data[i]:,.0f} ({display_percentages[i]:.1f}%)"],
             textposition='auto',
-            textfont=dict(size=20),
-            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} IOPS: %{{y:,.0f}}<extra></extra>"
+            textfont=dict(size=14),
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} IOPS: %{{y:,.0f}}<br>% of total: {display_percentages[i]:.1f}%<extra></extra>"
         ))
 
     fig.update_layout(
-        height=500,
+        height=400,
         template='plotly_dark',
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         showlegend=False,
-        margin=dict(t=30, b=30),
+        margin=dict(t=20, b=20, l=40, r=40),
         yaxis_title="IOPS",
         xaxis_title="Virtual Function",
-        font=dict(color='#E0E0E0')
+        font=dict(color='#E0E0E0', size=12)
     )
     st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
+    fig = go.Figure()
+    display_data = avg_bw if show_avg_data else [m['bw'] for m in current_metrics]
+
+    for i in range(VF_COUNT):
+        fig.add_trace(go.Bar(
+            x=[vf_labels[i]],
+            y=[display_data[i]],
+            name=vf_labels[i],
+            marker_color=DARK_COLORS[i],
+            text=[f"{display_data[i]:,.0f} MB/s"],
+            textposition='auto',
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} BW: %{{y:,.0f}} MB/s<extra></extra>"
+        ))
+
+    fig.update_layout(
+        height=400,
+        template='plotly_dark',
+        yaxis_title="Throughput (MB/s)",
+        xaxis_title="Virtual Function",
+        showlegend=False
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with tab3:
+    fig = go.Figure()
+    display_mean = avg_lat if show_avg_data else [m['lat_mean'] for m in current_metrics]
+    display_p99 = avg_p99lat if show_avg_data else [m['p99_lat'] for m in current_metrics]
+
+    for i in range(VF_COUNT):
+        fig.add_trace(go.Bar(
+            x=[vf_labels[i]],
+            y=[display_mean[i]],
+            name='Mean Latency',
+            marker_color=DARK_COLORS[i],
+            text=[f"{display_mean[i]:.1f} ms"],
+            textposition='auto',
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>Mean: %{{y:.1f}} ms<extra></extra>"
+        ))
+
+        fig.add_trace(go.Bar(
+            x=[vf_labels[i]],
+            y=[display_p99[i]],
+            name='P99 Latency',
+            marker_color=COLORS[i],
+            text=[f"{display_p99[i]:.1f} ms"],
+            textposition='auto',
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>P99: %{{y:.1f}} ms<extra></extra>",
+            opacity=0.7
+        ))
+
+    fig.update_layout(
+        height=400,
+        template='plotly_dark',
+        yaxis_title="Latency (ms)",
+        xaxis_title="Virtual Function",
+        barmode='group'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with tab4:
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # CPU Utilization Pie Chart
+        total_usr = sum(m['cpu_usr'] for m in current_metrics)
+        total_sys = sum(m['cpu_sys'] for m in current_metrics)
+        fig = go.Figure(go.Pie(
+            labels=['User CPU', 'System CPU', 'Idle'],
+            values=[total_usr, total_sys, max(0, 100 * VF_COUNT - (total_usr + total_sys))],
+            hole=0.4,
+            marker_colors=['#636EFA', '#EF553B', '#2E3241']
+        ))
+        fig.update_layout(
+            height=300,
+            title="CPU Utilization",
+            margin=dict(t=40, b=20)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        # Queue Depth Utilization
+        fig = go.Figure()
+        for i in range(VF_COUNT):
+            fig.add_trace(go.Bar(
+                x=[vf_labels[i]],
+                y=[current_metrics[i]['iodepth_util']],
+                name=vf_labels[i],
+                marker_color=DARK_COLORS[i],
+                text=[f"{current_metrics[i]['iodepth_util']:.0f}%"],
+                textposition='auto'
+            ))
+        fig.update_layout(
+            height=300,
+            title="Queue Depth Utilization (%)",
+            yaxis=dict(range=[0, 100]),
+            showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+with tab5:
     if len(st.session_state.avg_history) > 0:
         hist_df = pd.DataFrame(
             st.session_state.avg_history,
@@ -306,48 +494,24 @@ with tab2:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("No valid historical data available yet")
-
-with tab3:
-    # Determine which data to show
-    pie_data = avg_iops if show_avg_data else current_iops
-    total_pie_data = sum(pie_data)
-
-    if total_pie_data > 0:
-        fig = go.Figure(go.Pie(
-            labels=vf_labels,
-            values=pie_data,
-            marker_colors=DARK_COLORS,
-            textinfo='percent+value',
-            texttemplate='%{label}<br>%{value:,.0f} IOPS<br>(%{percent})',
-            hole=.4
-        ))
-
-        fig.update_layout(
-            height=500,
-            showlegend=False,
-            margin=dict(t=30, b=30),
-            font=dict(color='#E0E0E0')
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("No IOPS data available to display pie chart")
-
-# Raw Data Section
+# Raw Data Section - Only shown if toggled
 if show_raw_data:
-    st.markdown("### 📝 Raw Data")
+    st.markdown("### 📝 Raw Performance Data")
     raw_data = {
         "VF": vf_labels,
         "Current IOPS": current_iops,
         "Average IOPS": avg_iops,
         "Percentage": [f"{p:.1f}%" for p in percentages]
     }
-    st.dataframe(pd.DataFrame(raw_data), use_container_width=True)
+    st.dataframe(pd.DataFrame(raw_data).style.format({
+        "Current IOPS": "{:,.0f}",
+        "Average IOPS": "{:,.0f}"
+    }), use_container_width=True, height=300)
 
-# Footer
-st.markdown("---")
+# Compact Footer
 st.markdown("""
-    <div style="text-align:center; color:#808080; margin-top:2rem;">
-        <small>NVMe Performance Dashboard • Built with Streamlit</small><br>
-        <small>Data refreshes every {} seconds • Last update: {}</small>
+    <div class="footer">
+        <p>NVMe Performance Dashboard • Built with Streamlit • v2.2</p>
+        <p>Data refreshes every {} seconds • Last update: {}</p>
     </div>
 """.format(refresh_rate, datetime.now().strftime("%H:%M:%S")), unsafe_allow_html=True)
