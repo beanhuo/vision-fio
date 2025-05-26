@@ -29,7 +29,9 @@ Before running the dashboard, ensure you have the following dependencies install
 ### Install dependencies via pip
 
 ```bash
+python3 -m venv .venv
 pip install streamlit pandas plotly
+pip install streamlit-autorefresh
 ````
 
 ## Project Files
