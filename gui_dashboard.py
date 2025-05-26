@@ -88,6 +88,8 @@ with st.sidebar:
 
     refresh_rate = st.slider("🔄 Refresh rate (seconds)", 1, 10, 3)
     show_raw_data = st.checkbox("📝 Show raw data", False)
+    show_avg_data = st.toggle("📊 Show Average Data (vs Current)", value=True)
+
     st.markdown("---")
     st.markdown("""
         <div style="text-align:center; color:#808080;">
@@ -225,25 +227,27 @@ with col3:
         </div>
     """, unsafe_allow_html=True)
 
-# Main Visualization Area
+# Main Visualization Area - Modified to use the toggle
 st.markdown("### 📈 IOPS Distribution")
 tab1, tab2, tab3 = st.tabs(["Bar Chart", "Trend View", "Pie Chart"])
 
 with tab1:
     fig = go.Figure()
 
+    # Use average or current data based on toggle
+    display_data = avg_iops if show_avg_data else current_iops
+
     for i in range(VF_COUNT):
         fig.add_trace(go.Bar(
             x=[vf_labels[i]],
-            y=[avg_iops[i]],
+            y=[display_data[i]],
             name=vf_labels[i],
             marker_color=DARK_COLORS[i],
-            text=[f"{avg_iops[i]:,.0f}<br>({percentages[i]:.1f}%)"],
+            text=[f"{display_data[i]:,.0f}<br>({percentages[i]:.1f}%)"] if show_avg_data else [
+                f"{display_data[i]:,.0f}"],
             textposition='auto',
-            textfont=dict(
-                size=20
-            ),
-            hovertemplate=f"<b>{vf_labels[i]}</b><br>Avg IOPS: %{{y:,.0f}}<extra></extra>"
+            textfont=dict(size=20),
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} IOPS: %{{y:,.0f}}<extra></extra>"
         ))
 
     fig.update_layout(
@@ -274,8 +278,20 @@ with tab2:
                 y=hist_df[vf_labels[i]],
                 name=vf_labels[i],
                 line=dict(color=DARK_COLORS[i], width=2.5),
-                mode='lines'
+                mode='lines',
+                hovertemplate=f"<b>{vf_labels[i]}</b><br>Avg IOPS: %{{y:,.0f}}<extra></extra>"
             ))
+
+            # Add current value as a separate trace if showing current data
+            if not show_avg_data:
+                fig.add_trace(go.Scatter(
+                    x=[hist_df.index[-1]],
+                    y=[current_iops[i]],
+                    name=f"{vf_labels[i]} (Current)",
+                    mode='markers',
+                    marker=dict(color=DARK_COLORS[i], size=10),
+                    hovertemplate=f"<b>{vf_labels[i]}</b><br>Current IOPS: %{{y:,.0f}}<extra></extra>"
+                ))
 
         fig.update_layout(
             height=500,
@@ -292,11 +308,14 @@ with tab2:
         st.warning("No valid historical data available yet")
 
 with tab3:
-    # Only show pie chart if we have some IOPS
-    if total_avg_iops > 0:
+    # Determine which data to show
+    pie_data = avg_iops if show_avg_data else current_iops
+    total_pie_data = sum(pie_data)
+
+    if total_pie_data > 0:
         fig = go.Figure(go.Pie(
             labels=vf_labels,
-            values=avg_iops,
+            values=pie_data,
             marker_colors=DARK_COLORS,
             textinfo='percent+value',
             texttemplate='%{label}<br>%{value:,.0f} IOPS<br>(%{percent})',
