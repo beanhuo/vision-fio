@@ -12,7 +12,6 @@ VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
 MAX_HISTORY = 1000
 COLORS = ['#081075', '#801d0b', '#08a608', '#f2dc49']
 DARK_COLORS = ['#081075', '#801d0b', '#08a608', '#f2dc49']
-#DARK_COLORS = ['#4C78A8', '#E45756', '#54A24B', '#B279A2']
 
 # 🎨 Dark Theme Page Setup
 st.set_page_config(
@@ -106,6 +105,10 @@ if "avg_history" not in st.session_state:
     st.session_state.avg_history = []
 if "timestamps" not in st.session_state:
     st.session_state.timestamps = []
+if "last_valid_iops" not in st.session_state:
+    st.session_state.last_valid_iops = [0.0] * VF_COUNT
+if "data_valid" not in st.session_state:
+    st.session_state.data_valid = [False] * VF_COUNT
 
 # Trigger auto-refresh
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
@@ -116,35 +119,57 @@ def safe_divide(numerator, denominator):
     return numerator / denominator if denominator != 0 else 0
 
 
-# IOPS file reader with enhanced error handling
-def read_iops(file_path):
+# IOPS file reader with enhanced error handling and last valid value tracking
+def read_iops(file_path, vf_index):
     try:
         if not os.path.exists(file_path):
-            return 0.0
+            st.warning(f"⚠️ {file_path} does not exist")
+            return None
         if os.path.getsize(file_path) == 0:
-            return 0.0
+            #st.warning(f"⚠️ {file_path} is empty")
+            print(f"⚠️ {file_path} is empty")
+            return None
 
         with open(file_path) as f:
             data = json.load(f)
             if 'jobs' in data:
-                return data['jobs'][0]['read']['iops']
+                iops = data['jobs'][0]['read']['iops']
             elif 'iops' in data:
-                return data['iops']
+                iops = data['iops']
             elif 'read' in data:
-                return data['read']['iops']
-            return 0.0
+                iops = data['read']['iops']
+            else:
+                st.warning(f"⚠️ No 'jobs', 'iops', or 'read' key found in {file_path}")
+                return None
+
+            if iops > 0:  # Only update last valid if we got a positive value
+                st.session_state.last_valid_iops[vf_index] = iops
+                st.session_state.data_valid[vf_index] = True
+            return iops
+
     except Exception as e:
         st.warning(f"⚠️ Error reading {file_path}: {str(e)}")
-        return 0.0
+        return None
 
 
-# Read current IOPS
-current_iops = [read_iops(f) for f in VF_FILES]
+# Read current IOPS - returns None for invalid reads
+current_iops = []
+for i, f in enumerate(VF_FILES):
+    iops = read_iops(f, i)
+    if iops is not None:
+        current_iops.append(iops)
+    else:
+        # Use last valid value if available, otherwise skip
+        if st.session_state.data_valid[i]:
+            current_iops.append(st.session_state.last_valid_iops[i])
+        else:
+            current_iops.append(0.0)  # Fallback to 0 if no valid data yet
 
-# Update running totals
-for i in range(VF_COUNT):
-    st.session_state.total_iops[i] += current_iops[i]
-    st.session_state.samples[i] += 1
+# Only update running totals if we have valid data for all VFs
+if all(st.session_state.data_valid):
+    for i in range(VF_COUNT):
+        st.session_state.total_iops[i] += current_iops[i]
+        st.session_state.samples[i] += 1
 
 # Compute averages with safe division
 avg_iops = [
@@ -152,22 +177,23 @@ avg_iops = [
     for i in range(VF_COUNT)
 ]
 
-# Append to history
-st.session_state.avg_history.append(avg_iops)
-st.session_state.timestamps.append(datetime.now().strftime("%H:%M:%S"))
-if len(st.session_state.avg_history) > MAX_HISTORY:
-    st.session_state.avg_history.pop(0)
-    st.session_state.timestamps.pop(0)
+# Append to history only if we have valid data
+if any(iops > 0 for iops in current_iops):
+    st.session_state.avg_history.append(avg_iops)
+    st.session_state.timestamps.append(datetime.now().strftime("%H:%M:%S"))
+    if len(st.session_state.avg_history) > MAX_HISTORY:
+        st.session_state.avg_history.pop(0)
+        st.session_state.timestamps.pop(0)
 
 # Prepare DataFrames with safe percentage calculation
 vf_labels = [f"VF{i}" for i in range(VF_COUNT)]
 total_avg_iops = sum(avg_iops)
 
-# Calculate percentages safely
-percentages = [
-    safe_divide(iops, total_avg_iops) * 100 if total_avg_iops > 0 else 0
-    for iops in avg_iops
-]
+# Calculate percentages safely - only if we have valid data
+if total_avg_iops > 0:
+    percentages = [safe_divide(iops, total_avg_iops) * 100 for iops in avg_iops]
+else:
+    percentages = [0.0] * VF_COUNT
 
 # Main Metrics Display
 st.markdown("### 📊 Performance Summary")
@@ -215,7 +241,7 @@ with tab1:
             text=[f"{avg_iops[i]:,.0f}<br>({percentages[i]:.1f}%)"],
             textposition='auto',
             textfont=dict(
-                size=20  # Increase the font size here
+                size=20
             ),
             hovertemplate=f"<b>{vf_labels[i]}</b><br>Avg IOPS: %{{y:,.0f}}<extra></extra>"
         ))
@@ -234,33 +260,36 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
-    hist_df = pd.DataFrame(
-        st.session_state.avg_history,
-        columns=vf_labels,
-        index=st.session_state.timestamps
-    )
+    if len(st.session_state.avg_history) > 0:
+        hist_df = pd.DataFrame(
+            st.session_state.avg_history,
+            columns=vf_labels,
+            index=st.session_state.timestamps
+        )
 
-    fig = go.Figure()
-    for i in range(VF_COUNT):
-        fig.add_trace(go.Scatter(
-            x=hist_df.index,
-            y=hist_df[vf_labels[i]],
-            name=vf_labels[i],
-            line=dict(color=DARK_COLORS[i], width=2.5),
-            mode='lines'
-        ))
+        fig = go.Figure()
+        for i in range(VF_COUNT):
+            fig.add_trace(go.Scatter(
+                x=hist_df.index,
+                y=hist_df[vf_labels[i]],
+                name=vf_labels[i],
+                line=dict(color=DARK_COLORS[i], width=2.5),
+                mode='lines'
+            ))
 
-    fig.update_layout(
-        height=500,
-        template='plotly_dark',
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(t=30, b=30),
-        yaxis_title="IOPS",
-        xaxis_title="Time",
-        hovermode="x unified"
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            height=500,
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(t=30, b=30),
+            yaxis_title="IOPS",
+            xaxis_title="Time",
+            hovermode="x unified"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No valid historical data available yet")
 
 with tab3:
     # Only show pie chart if we have some IOPS
