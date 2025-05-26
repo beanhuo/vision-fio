@@ -74,9 +74,8 @@ st.markdown("""
 
 # 🏁 Dashboard Header
 st.markdown("""
-    <div style="text-align:center; margin-bottom:2rem;">
-        <h1 class="dashboard-title">NVMe Virtual Function Performance Dashboard</h1>
-        <p style="color:#B0B0B0; font-size:1.1rem;">Real-time monitoring of NVMe virtualization performance metrics</p>
+    <div style="text-align:center; margin-bottom:0.5rem;">
+        <h1 class="dashboard-title">Real-Time NVMe Performance Dashboard</h1>
     </div>
 """, unsafe_allow_html=True)
 
@@ -175,28 +174,28 @@ st.markdown("### 📊 Performance Summary")
 col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown(f"""
-        <div class="metric-card">
-            <h3 style="color:#4A90E2;">Current Total IOPS</h3>
-            <h1 style="color:#4A90E2; font-size:2.5rem;">{sum(current_iops):,.0f}</h1>
-            <p style="color:#B0B0B0;">Across all VFs</p>
+        <div class="metric-card" style="padding: 10px; margin: 5px;">
+            <h4 style="color:#4A90E2;font-size:1.2rem; margin-bottom: 0.5rem;">Current Total IOPS</h4>
+            <h2 style="color:#4A90E2; font-size:2.5rem;margin: 0;">{sum(current_iops):,.0f}</h2>
+            <p style="color:#B0B0B0; font-size:0.9rem; margin: 0;">Across all VFs</p>
         </div>
     """, unsafe_allow_html=True)
 
 with col2:
     st.markdown(f"""
-        <div class="metric-card">
-            <h3 style="color:#00CC96;">Average Total IOPS</h3>
-            <h1 style="color:#00CC96; font-size:2.5rem;">{total_avg_iops:,.0f}</h1>
-            <p style="color:#B0B0B0;">Since session start</p>
+        <div class="metric-card" style="padding: 10px; margin: 5px;">
+            <h4 style="color:#00CC96; font-size:1.2rem; margin-bottom: 0.5rem;">Average Total IOPS</h4>
+            <h2 style="color:#00CC96; font-size:2rem; margin: 0;">{total_avg_iops:,.0f}</h2>
+            <p style="color:#B0B0B0; font-size:0.9rem; margin: 0;">Since session start</p>
         </div>
     """, unsafe_allow_html=True)
 
 with col3:
     st.markdown(f"""
-        <div class="metric-card">
-            <h3 style="color:#AB63FA;">Active VFs</h3>
-            <h1 style="color:#AB63FA; font-size:2.5rem;">{VF_COUNT}</h1>
-            <p style="color:#B0B0B0;">Monitored instances</p>
+        <div class="metric-card" style="padding: 10px; margin: 5px;">
+            <h4 style="color:#AB63FA; font-size:1.2rem; margin-bottom: 0.5rem;">Active VFs</h4>
+            <h2 style="color:#AB63FA; font-size:2rem; margin: 0;">{VF_COUNT}</h2>
+            <p style="color:#B0B0B0; font-size:0.9rem; margin: 0;">Monitored instances</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -215,6 +214,9 @@ with tab1:
             marker_color=DARK_COLORS[i],
             text=[f"{avg_iops[i]:,.0f}<br>({percentages[i]:.1f}%)"],
             textposition='auto',
+            textfont=dict(
+                size=20  # Increase the font size here
+            ),
             hovertemplate=f"<b>{vf_labels[i]}</b><br>Avg IOPS: %{{y:,.0f}}<extra></extra>"
         ))
 
