@@ -618,17 +618,20 @@ def run_fio_parallel():
     for idx, dev in enumerate(VF_DEVICES):
         output_file = f"vf{idx}.json"
         fio_cmd = [
-            "fio",
-            "--name=test",
+            "sudo", "fio",
             f"--filename={dev}",
+            "--direct=1",
             "--rw=randread",
-            "--bs=4k",
-            "--iodepth=32",
-            "--runtime=3",
+            "--bs=128k",
+            "--ioengine=libaio",
+            "--iodepth=64",
+            "--runtime=10",
+            "--numjobs=4",
             "--time_based",
-            "--numjobs=1",
             "--group_reporting",
-            "--size=512M",
+            "--name=throughput-test-job",
+            "--eta-newline=1",
+            "--readonly",
             "--output-format=json",
             f"--output={output_file}"
         ]
