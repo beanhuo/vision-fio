@@ -189,7 +189,9 @@ with st.sidebar:
     # --- Sidebar: Device Count Input ---
     device_count = st.number_input("How many devices to test?", min_value=1, max_value=32, value=4, step=1, help="Number of parallel devices to run FIO on.")
     VF_COUNT = device_count
+    START_IDX = 2  # Start from nvme0n2
     VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
+    VF_DEVICES = [f"/tmp/nvme0n{START_IDX + i}" for i in range(VF_COUNT)]
 
     # --- Robust Session State Initialization (at the top, after VF_COUNT is set) ---
     if "total_iops" not in st.session_state or len(st.session_state.total_iops) != VF_COUNT:
@@ -611,7 +613,6 @@ st.markdown("""
 """.format(refresh_rate, datetime.now().strftime("%H:%M:%S")), unsafe_allow_html=True)
 
 # --- FIO Runner Logic ---
-VF_DEVICES = [f"/tmp/nvme0n{i}" for i in range(VF_COUNT)]
 def run_fio_parallel():
     processes = []
     for idx, dev in enumerate(VF_DEVICES):
