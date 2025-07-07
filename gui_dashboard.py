@@ -5,21 +5,48 @@ import plotly.graph_objects as go
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
+import subprocess
+import time
 
-# Constants
-VF_COUNT = 4
-VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
-MAX_HISTORY = 100
-COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
-DARK_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
-
-# 🎨 Modern Dark Theme Page Setup
+# Ensure this is the very first Streamlit command
 st.set_page_config(
-    page_title="NVMe VF Performance Dashboard",
+    page_title="NVMe VF Perf Dashboard (Micron 4150AT w/ SR-IOV QoS)",
     layout="wide",
     page_icon="🚀",
     initial_sidebar_state="expanded"
 )
+
+# Aggressive CSS to minimize vertical space
+st.markdown(
+    """
+    <style>
+    .stApp {
+        padding-top: 0.1rem !important;
+    }
+    header[data-testid='stHeader'] {
+        height: 0px !important;
+        min-height: 0px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+    }
+    .block-container {
+        padding-top: 0.2rem !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Constants
+MAX_HISTORY = 100
+COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
+DARK_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
 
 # ✨ Enhanced Dark Theme CSS Styling
 st.markdown("""
@@ -114,12 +141,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 🏁 Compact Dashboard Header
-st.markdown("""
-    <div style="text-align:center; margin-bottom:0.5rem;">
-        <h1 class="dashboard-title">NVMe VF Performance Dashboard</h1>
-    </div>
-""", unsafe_allow_html=True)
+# Minimal, centered, single-line title
+st.markdown(
+    '<div style="text-align:center; margin:0; padding:0; line-height:1;">'
+    '<span style="font-size:2em; font-weight:600;">NVMe VF Perf Dashboard (Micron 4150AT w/ SR-IOV QoS) </span></div>',
+    unsafe_allow_html=True
+)
 
 # 🎮 Compact Sidebar Controls
 with st.sidebar:
@@ -141,21 +168,72 @@ with st.sidebar:
         </div>
     """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), unsafe_allow_html=True)
 
-# Initialize state
-if "total_iops" not in st.session_state:
-    st.session_state.total_iops = [0.0] * VF_COUNT
-if "samples" not in st.session_state:
-    st.session_state.samples = [0] * VF_COUNT
-if "avg_history" not in st.session_state:
-    st.session_state.avg_history = []
-if "timestamps" not in st.session_state:
-    st.session_state.timestamps = []
-if "last_valid_iops" not in st.session_state:
-    st.session_state.last_valid_iops = [0.0] * VF_COUNT
-if "last_valid_metrics" not in st.session_state:
-    st.session_state.last_valid_metrics = [None] * VF_COUNT
-if "data_valid" not in st.session_state:
-    st.session_state.data_valid = [False] * VF_COUNT
+    # --- Add FIO Runner Controls to Sidebar ---
+    st.markdown("""
+        <div style="text-align:center; margin-bottom:1rem;">
+            <h2 style="color:white; font-size:1.3rem;">69e0f Benchmark Controls</h2>
+        </div>
+    """, unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("\u25b6\ufe0f Start Testing"):
+            st.session_state.running = True
+            st.session_state.paused = False
+    with col2:
+        if st.button("\u23f8\ufe0f Suspend"):
+            st.session_state.paused = True
+    with col3:
+        if st.button("\u23ef\ufe0f Resume"):
+            st.session_state.paused = False
+
+    # --- Sidebar: Device Count Input ---
+    device_count = st.number_input("How many devices to test?", min_value=1, max_value=32, value=4, step=1, help="Number of parallel devices to run FIO on.")
+    VF_COUNT = device_count
+    VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
+
+    # --- Robust Session State Initialization (at the top, after VF_COUNT is set) ---
+    if "total_iops" not in st.session_state or len(st.session_state.total_iops) != VF_COUNT:
+        st.session_state.total_iops = [0.0] * VF_COUNT
+    if "total_bw" not in st.session_state or len(st.session_state.total_bw) != VF_COUNT:
+        st.session_state.total_bw = [0.0] * VF_COUNT
+    if "total_lat" not in st.session_state or len(st.session_state.total_lat) != VF_COUNT:
+        st.session_state.total_lat = [0.0] * VF_COUNT
+    if "total_p99lat" not in st.session_state or len(st.session_state.total_p99lat) != VF_COUNT:
+        st.session_state.total_p99lat = [0.0] * VF_COUNT
+    if "samples" not in st.session_state or len(st.session_state.samples) != VF_COUNT:
+        st.session_state.samples = [0] * VF_COUNT
+    if "last_valid_iops" not in st.session_state or len(st.session_state.last_valid_iops) != VF_COUNT:
+        st.session_state.last_valid_iops = [0.0] * VF_COUNT
+    if "last_valid_metrics" not in st.session_state or len(st.session_state.last_valid_metrics) != VF_COUNT:
+        st.session_state.last_valid_metrics = [None] * VF_COUNT
+    if "data_valid" not in st.session_state or len(st.session_state.data_valid) != VF_COUNT:
+        st.session_state.data_valid = [False] * VF_COUNT
+    if "avg_history" not in st.session_state:
+        st.session_state.avg_history = []
+    if "timestamps" not in st.session_state:
+        st.session_state.timestamps = []
+    if "running" not in st.session_state:
+        st.session_state.running = False
+    if "paused" not in st.session_state:
+        st.session_state.paused = False
+    if "total_cpu_usr" not in st.session_state or len(st.session_state.total_cpu_usr) != VF_COUNT:
+        st.session_state.total_cpu_usr = [0.0] * VF_COUNT
+    if "total_cpu_sys" not in st.session_state or len(st.session_state.total_cpu_sys) != VF_COUNT:
+        st.session_state.total_cpu_sys = [0.0] * VF_COUNT
+    if "total_iodepth_util" not in st.session_state or len(st.session_state.total_iodepth_util) != VF_COUNT:
+        st.session_state.total_iodepth_util = [0.0] * VF_COUNT
+
+    st.session_state.last_device_count = VF_COUNT
+
+    # At the end of the sidebar, add the status message at the bottom
+    st.markdown('<div style="height:2em;"></div>', unsafe_allow_html=True)  # Spacer for separation
+    if st.session_state.get("running", False):
+        if st.session_state.get("paused", False):
+            st.info("⏸️ Paused... waiting")
+        else:
+            st.success("🚀 Running FIO on all VFs in parallel...")
+    else:
+        st.info("⏸️ Not running")
 
 # Trigger auto-refresh
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
@@ -168,14 +246,21 @@ def safe_divide(numerator, denominator):
 def read_iops(file_path, vf_index):
     try:
         if not os.path.exists(file_path):
-            st.warning(f"⚠️ {file_path} does not exist")
+            with st.sidebar:
+                st.info(f"ℹ️ {file_path} does not exist yet. Please run a benchmark.")
             return None, None
         if os.path.getsize(file_path) == 0:
-            print(f"⚠️ {file_path} is empty")
+            with st.sidebar:
+                st.info(f"ℹ️ {file_path} is empty. Please run a benchmark.")
             return None, None
 
         with open(file_path) as f:
-            data = json.load(f)
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError as e:
+                with st.sidebar:
+                    st.warning(f"⚠️ Error reading {file_path}: {str(e)}. The file may be corrupted or contain extra data. Please check the file.")
+                return None, None
             if 'jobs' in data:
                 job_data = data['jobs'][0]
                 iops = job_data['read']['iops']
@@ -196,7 +281,8 @@ def read_iops(file_path, vf_index):
                     'iodepth_util': iodepth_util
                 }
             else:
-                st.warning(f"⚠️ No 'jobs' key found in {file_path}")
+                with st.sidebar:
+                    st.warning(f"⚠️ No 'jobs' key found in {file_path}")
                 return None, None
 
             if iops > 0:
@@ -206,22 +292,9 @@ def read_iops(file_path, vf_index):
             return iops, metrics
 
     except Exception as e:
-        st.warning(f"⚠️ Error reading {file_path}: {str(e)}")
+        with st.sidebar:
+            st.warning(f"⚠️ Error reading {file_path}: {str(e)}")
         return None, None
-
-# Initialize additional session state variables
-if "total_bw" not in st.session_state:
-    st.session_state.total_bw = [0.0] * VF_COUNT
-if "total_lat" not in st.session_state:
-    st.session_state.total_lat = [0.0] * VF_COUNT
-if "total_p99lat" not in st.session_state:
-    st.session_state.total_p99lat = [0.0] * VF_COUNT
-if "total_cpu_usr" not in st.session_state:
-    st.session_state.total_cpu_usr = [0.0] * VF_COUNT
-if "total_cpu_sys" not in st.session_state:
-    st.session_state.total_cpu_sys = [0.0] * VF_COUNT
-if "total_iodepth_util" not in st.session_state:
-    st.session_state.total_iodepth_util = [0.0] * VF_COUNT
 
 # Read current metrics
 current_iops = []
@@ -291,6 +364,201 @@ else:
 # 🚀 Enhanced Main Dashboard Layout
 # =============================================
 
+# Move the charts section to the top, before the performance summary
+st.markdown('---')
+st.markdown('### IOPS/Perf per VF/VM')
+
+# Enhanced Visualization Tabs
+tab1, tab2, tab3, tab4, tab5= st.tabs(["IOPS", "Throughput", "Latency", "CPU/Queue", "IOPS Trend"])
+
+with tab1:
+    fig = go.Figure()
+    display_data = avg_iops if show_avg_data else current_iops
+    display_percentages = percentages if show_avg_data else [
+        safe_divide(iops, sum(current_iops)) * 100 if sum(current_iops) > 0 else 0 for iops in current_iops]
+
+    for i in range(VF_COUNT):
+        fig.add_trace(go.Bar(
+            x=[vf_labels[i]],
+            y=[display_data[i]],
+            name=vf_labels[i],
+            marker_color=DARK_COLORS[i % len(DARK_COLORS)],
+            text=[f"{display_data[i]:,.0f} ({display_percentages[i]:.1f}%)"],
+            textposition='auto',
+            textfont=dict(size=18),
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} IOPS: %{{y:,.0f}}<br>% of total: {display_percentages[i]:.1f}%<extra></extra>"
+        ))
+
+    fig.update_layout(
+        height=400,
+        template='plotly_dark',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False,
+        margin=dict(t=20, b=20, l=40, r=40),
+        yaxis_title="IOPS",
+        xaxis_title="Virtual Function",
+        font=dict(color='#E0E0E0', size=12),
+        xaxis=dict(tickfont=dict(size=28))
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with tab2:
+    fig = go.Figure()
+    display_data = avg_bw if show_avg_data else [m['bw'] for m in current_metrics]
+
+    for i in range(VF_COUNT):
+        fig.add_trace(go.Bar(
+            x=[vf_labels[i]],
+            y=[display_data[i]],
+            name=vf_labels[i],
+            marker_color=DARK_COLORS[i % len(DARK_COLORS)],
+            text=[f"{display_data[i]:,.0f} MB/s"],
+            textposition='auto',
+            textfont=dict(size=18),
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} BW: %{{y:,.0f}} MB/s<extra></extra>"
+        ))
+
+    fig.update_layout(
+        height=400,
+        template='plotly_dark',
+        yaxis_title="Throughput (MB/s)",
+        xaxis_title="Virtual Function",
+        showlegend=False,
+        xaxis=dict(tickfont=dict(size=28))
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with tab3:
+    fig = go.Figure()
+    display_mean = avg_lat if show_avg_data else [m['lat_mean'] for m in current_metrics]
+    display_p99 = avg_p99lat if show_avg_data else [m['p99_lat'] for m in current_metrics]
+
+    for i in range(VF_COUNT):
+        fig.add_trace(go.Bar(
+            x=[vf_labels[i]],
+            y=[display_mean[i]],
+            name='Mean Latency',
+            marker_color=DARK_COLORS[i % len(DARK_COLORS)],
+            text=[f"{display_mean[i]:.1f} ms"],
+            textposition='auto',
+            textfont=dict(size=18),
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>Mean: %{{y:.1f}} ms<extra></extra>"
+        ))
+
+        fig.add_trace(go.Bar(
+            x=[vf_labels[i]],
+            y=[display_p99[i]],
+            name='P99 Latency',
+            marker_color=COLORS[i % len(COLORS)],
+            text=[f"{display_p99[i]:.1f} ms"],
+            textposition='auto',
+            textfont=dict(size=18),
+            hovertemplate=f"<b>{vf_labels[i]}</b><br>P99: %{{y:.1f}} ms<extra></extra>",
+            opacity=0.7
+        ))
+
+    fig.update_layout(
+        height=400,
+        template='plotly_dark',
+        yaxis_title="Latency (ms)",
+        xaxis_title="Virtual Function",
+        barmode='group',
+        xaxis=dict(tickfont=dict(size=28))
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with tab4:
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # CPU Utilization Pie Chart
+        total_usr = sum(m['cpu_usr'] for m in current_metrics)
+        total_sys = sum(m['cpu_sys'] for m in current_metrics)
+        fig = go.Figure(go.Pie(
+            labels=['User CPU', 'System CPU', 'Idle'],
+            values=[total_usr, total_sys, max(0, 100 * VF_COUNT - (total_usr + total_sys))],
+            hole=0.4,
+            marker_colors=['#636EFA', '#EF553B', '#2E3241']
+        ))
+        fig.update_layout(
+            height=300,
+            title="CPU Utilization",
+            margin=dict(t=40, b=20),
+            xaxis=dict(tickfont=dict(size=28))
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        # Queue Depth Utilization
+        fig = go.Figure()
+        for i in range(VF_COUNT):
+            fig.add_trace(go.Bar(
+                x=[vf_labels[i]],
+                y=[current_metrics[i]['iodepth_util']],
+                name=vf_labels[i],
+                marker_color=DARK_COLORS[i % len(DARK_COLORS)],
+                text=[f"{current_metrics[i]['iodepth_util']:.0f}%"],
+                textposition='auto',
+                textfont=dict(size=18),
+                hovertemplate=f"<b>{vf_labels[i]}</b><br>Queue Depth Utilization: %{{y:.0f}}%<extra></extra>",
+            ))
+        fig.update_layout(
+            height=300,
+            title="Queue Depth Utilization (%)",
+            yaxis=dict(range=[0, 100]),
+            showlegend=False,
+            xaxis=dict(tickfont=dict(size=28))
+        )
+        st.plotly_chart(fig, use_container_width=True)
+with tab5:
+    if len(st.session_state.avg_history) > 0:
+        hist_df = pd.DataFrame(
+            st.session_state.avg_history,
+            columns=vf_labels,
+            index=st.session_state.timestamps
+        )
+
+        fig = go.Figure()
+        for i in range(VF_COUNT):
+            fig.add_trace(go.Scatter(
+                x=hist_df.index,
+                y=hist_df[vf_labels[i]],
+                name=vf_labels[i],
+                line=dict(color=DARK_COLORS[i % len(DARK_COLORS)], width=2.5),
+                mode='lines',
+                hovertemplate=f"<b>{vf_labels[i]}</b><br>Avg IOPS: %{{y:,.0f}}<extra></extra>",
+                textfont=dict(size=18),
+            ))
+
+            # Add current value as a separate trace if showing current data
+            if not show_avg_data:
+                fig.add_trace(go.Scatter(
+                    x=[hist_df.index[-1]],
+                    y=[current_iops[i]],
+                    name=f"{vf_labels[i]} (Current)",
+                    mode='markers',
+                    marker=dict(color=DARK_COLORS[i % len(DARK_COLORS)], size=10),
+                    hovertemplate=f"<b>{vf_labels[i]}</b><br>Current IOPS: %{{y:,.0f}}<extra></extra>",
+                    textfont=dict(size=20),
+                ))
+
+        fig.update_layout(
+            height=500,
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            margin=dict(t=30, b=30),
+            yaxis_title="IOPS",
+            xaxis_title="Time",
+            hovermode="x unified",
+            xaxis=dict(tickfont=dict(size=28))
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No valid historical data available yet")
+
+# Then render the top performance summary section below the charts
 # Main Metrics Display - Now with more metrics
 st.markdown("### 📊 Performance Summary")
 cols = st.columns(4)
@@ -318,182 +586,6 @@ for i, col in enumerate(cols):
             </div>
         """, unsafe_allow_html=True)
 
-# Enhanced Visualization Tabs
-tab1, tab2, tab3, tab4, tab5= st.tabs(["IOPS", "Throughput", "Latency", "CPU/Queue", "IOPS Trend"])
-
-with tab1:
-    fig = go.Figure()
-    display_data = avg_iops if show_avg_data else current_iops
-    display_percentages = percentages if show_avg_data else [
-        safe_divide(iops, sum(current_iops)) * 100 if sum(current_iops) > 0 else 0 for iops in current_iops]
-
-    for i in range(VF_COUNT):
-        fig.add_trace(go.Bar(
-            x=[vf_labels[i]],
-            y=[display_data[i]],
-            name=vf_labels[i],
-            marker_color=DARK_COLORS[i],
-            text=[f"{display_data[i]:,.0f} ({display_percentages[i]:.1f}%)"],
-            textposition='auto',
-            textfont=dict(size=14),
-            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} IOPS: %{{y:,.0f}}<br>% of total: {display_percentages[i]:.1f}%<extra></extra>"
-        ))
-
-    fig.update_layout(
-        height=400,
-        template='plotly_dark',
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        showlegend=False,
-        margin=dict(t=20, b=20, l=40, r=40),
-        yaxis_title="IOPS",
-        xaxis_title="Virtual Function",
-        font=dict(color='#E0E0E0', size=12)
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-with tab2:
-    fig = go.Figure()
-    display_data = avg_bw if show_avg_data else [m['bw'] for m in current_metrics]
-
-    for i in range(VF_COUNT):
-        fig.add_trace(go.Bar(
-            x=[vf_labels[i]],
-            y=[display_data[i]],
-            name=vf_labels[i],
-            marker_color=DARK_COLORS[i],
-            text=[f"{display_data[i]:,.0f} MB/s"],
-            textposition='auto',
-            hovertemplate=f"<b>{vf_labels[i]}</b><br>{'Avg' if show_avg_data else 'Current'} BW: %{{y:,.0f}} MB/s<extra></extra>"
-        ))
-
-    fig.update_layout(
-        height=400,
-        template='plotly_dark',
-        yaxis_title="Throughput (MB/s)",
-        xaxis_title="Virtual Function",
-        showlegend=False
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-with tab3:
-    fig = go.Figure()
-    display_mean = avg_lat if show_avg_data else [m['lat_mean'] for m in current_metrics]
-    display_p99 = avg_p99lat if show_avg_data else [m['p99_lat'] for m in current_metrics]
-
-    for i in range(VF_COUNT):
-        fig.add_trace(go.Bar(
-            x=[vf_labels[i]],
-            y=[display_mean[i]],
-            name='Mean Latency',
-            marker_color=DARK_COLORS[i],
-            text=[f"{display_mean[i]:.1f} ms"],
-            textposition='auto',
-            hovertemplate=f"<b>{vf_labels[i]}</b><br>Mean: %{{y:.1f}} ms<extra></extra>"
-        ))
-
-        fig.add_trace(go.Bar(
-            x=[vf_labels[i]],
-            y=[display_p99[i]],
-            name='P99 Latency',
-            marker_color=COLORS[i],
-            text=[f"{display_p99[i]:.1f} ms"],
-            textposition='auto',
-            hovertemplate=f"<b>{vf_labels[i]}</b><br>P99: %{{y:.1f}} ms<extra></extra>",
-            opacity=0.7
-        ))
-
-    fig.update_layout(
-        height=400,
-        template='plotly_dark',
-        yaxis_title="Latency (ms)",
-        xaxis_title="Virtual Function",
-        barmode='group'
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-with tab4:
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # CPU Utilization Pie Chart
-        total_usr = sum(m['cpu_usr'] for m in current_metrics)
-        total_sys = sum(m['cpu_sys'] for m in current_metrics)
-        fig = go.Figure(go.Pie(
-            labels=['User CPU', 'System CPU', 'Idle'],
-            values=[total_usr, total_sys, max(0, 100 * VF_COUNT - (total_usr + total_sys))],
-            hole=0.4,
-            marker_colors=['#636EFA', '#EF553B', '#2E3241']
-        ))
-        fig.update_layout(
-            height=300,
-            title="CPU Utilization",
-            margin=dict(t=40, b=20)
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        # Queue Depth Utilization
-        fig = go.Figure()
-        for i in range(VF_COUNT):
-            fig.add_trace(go.Bar(
-                x=[vf_labels[i]],
-                y=[current_metrics[i]['iodepth_util']],
-                name=vf_labels[i],
-                marker_color=DARK_COLORS[i],
-                text=[f"{current_metrics[i]['iodepth_util']:.0f}%"],
-                textposition='auto'
-            ))
-        fig.update_layout(
-            height=300,
-            title="Queue Depth Utilization (%)",
-            yaxis=dict(range=[0, 100]),
-            showlegend=False
-        )
-        st.plotly_chart(fig, use_container_width=True)
-with tab5:
-    if len(st.session_state.avg_history) > 0:
-        hist_df = pd.DataFrame(
-            st.session_state.avg_history,
-            columns=vf_labels,
-            index=st.session_state.timestamps
-        )
-
-        fig = go.Figure()
-        for i in range(VF_COUNT):
-            fig.add_trace(go.Scatter(
-                x=hist_df.index,
-                y=hist_df[vf_labels[i]],
-                name=vf_labels[i],
-                line=dict(color=DARK_COLORS[i], width=2.5),
-                mode='lines',
-                hovertemplate=f"<b>{vf_labels[i]}</b><br>Avg IOPS: %{{y:,.0f}}<extra></extra>"
-            ))
-
-            # Add current value as a separate trace if showing current data
-            if not show_avg_data:
-                fig.add_trace(go.Scatter(
-                    x=[hist_df.index[-1]],
-                    y=[current_iops[i]],
-                    name=f"{vf_labels[i]} (Current)",
-                    mode='markers',
-                    marker=dict(color=DARK_COLORS[i], size=10),
-                    hovertemplate=f"<b>{vf_labels[i]}</b><br>Current IOPS: %{{y:,.0f}}<extra></extra>"
-                ))
-
-        fig.update_layout(
-            height=500,
-            template='plotly_dark',
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            margin=dict(t=30, b=30),
-            yaxis_title="IOPS",
-            xaxis_title="Time",
-            hovermode="x unified"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("No valid historical data available yet")
 # Raw Data Section - Only shown if toggled
 if show_raw_data:
     st.markdown("### 📝 Raw Performance Data")
@@ -515,3 +607,35 @@ st.markdown("""
         <p>Data refreshes every {} seconds • Last update: {}</p>
     </div>
 """.format(refresh_rate, datetime.now().strftime("%H:%M:%S")), unsafe_allow_html=True)
+
+# --- FIO Runner Logic ---
+VF_DEVICES = [f"/tmp/nvme0n{i}" for i in range(VF_COUNT)]
+def run_fio_parallel():
+    processes = []
+    for idx, dev in enumerate(VF_DEVICES):
+        output_file = f"vf{idx}.json"
+        fio_cmd = [
+            "fio",
+            "--name=test",
+            f"--filename={dev}",
+            "--rw=randread",
+            "--bs=4k",
+            "--iodepth=32",
+            "--runtime=3",
+            "--time_based",
+            "--numjobs=1",
+            "--group_reporting",
+            "--size=512M",
+            "--output-format=json",
+            f"--output={output_file}"
+        ]
+        p = subprocess.Popen(fio_cmd)
+        processes.append(p)
+    for p in processes:
+        p.wait()
+
+# --- Main FIO Control Loop ---
+if st.session_state.running and not st.session_state.paused:
+    run_fio_parallel()
+    # Do NOT set st.session_state.running = False here; keep running until user suspends
+    time.sleep(1)
