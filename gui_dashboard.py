@@ -45,8 +45,8 @@ st.markdown(
 
 # Constants
 MAX_HISTORY = 100
-COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
-DARK_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA']
+COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#FF6B6B', '#4A90E2', '#6A5ACD']
+DARK_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#FF6B6B', '#4A90E2', '#6A5ACD']
 
 # ✨ Enhanced Dark Theme CSS Styling
 st.markdown("""
@@ -367,6 +367,7 @@ else:
 # Move the charts section to the top, before the performance summary
 st.markdown('---')
 st.markdown('### IOPS/Perf per VF/VM')
+st.markdown('<div style="margin-bottom: 0.7em;"></div>', unsafe_allow_html=True)
 
 # Enhanced Visualization Tabs
 tab1, tab2, tab3, tab4, tab5= st.tabs(["IOPS", "Throughput", "Latency", "CPU/Queue", "IOPS Trend"])
@@ -561,6 +562,7 @@ with tab5:
 # Then render the top performance summary section below the charts
 # Main Metrics Display - Now with more metrics
 st.markdown("### 📊 Performance Summary")
+st.markdown('<div style="margin-bottom: 0.7em;"></div>', unsafe_allow_html=True)
 cols = st.columns(4)
 
 # Calculate summary metrics using current data (or last valid data if current is invalid)
