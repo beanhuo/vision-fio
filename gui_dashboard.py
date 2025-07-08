@@ -7,6 +7,25 @@ from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 import subprocess
 import time
+import glob
+
+# --- Quit check: stop dashboard and kill FIO if requested ---
+if 'quit' in st.session_state and st.session_state.get('quit', False):
+    import streamlit as st
+    st.error("🛑 Dashboard has been stopped by user. Please refresh the page to restart.")
+    try:
+        import psutil
+        import os
+        # Attempt to kill any running fio processes for this user
+        for proc in psutil.process_iter(['pid', 'name', 'username', 'cmdline']):
+            try:
+                if 'fio' in proc.info['name'] and proc.info['username'] == os.getlogin():
+                    proc.kill()
+            except Exception:
+                pass
+    except ImportError:
+        st.warning("psutil is not installed; cannot auto-kill FIO processes.")
+    st.stop()
 
 # Ensure this is the very first Streamlit command
 st.set_page_config(
@@ -148,17 +167,169 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 🎮 Compact Sidebar Controls
+# --- Sidebar: Device Auto-Discovery and Presets ---
+import glob
+
+def discover_nvme_devices():
+    # Try /dev/nvme* first, fallback to /tmp/nvme*
+    devs = sorted(glob.glob('/dev/nvme*n*'))
+    if not devs:
+        devs = sorted(glob.glob('/tmp/nvme*n*'))
+    return devs
+
+# --- Initialize sidebar controls and variables before device logic ---
 with st.sidebar:
+    # Dashboard Controls (moved up)
     st.markdown("""
         <div style="text-align:center; margin-bottom:1rem;">
             <h2 style="color:white; font-size:1.3rem;">⚙️ Dashboard Controls</h2>
         </div>
     """, unsafe_allow_html=True)
-
     refresh_rate = st.slider("🔄 Refresh rate (seconds)", 1, 10, 3, help="Adjust how often the dashboard updates")
     show_raw_data = st.checkbox("📝 Show raw data", False, help="Display raw performance data table")
     show_avg_data = st.toggle("📊 Show Average Data", value=True, help="Toggle between current and average IOPS display")
+
+    # Device Selection
+    st.markdown("""
+        <div style="text-align:center; margin-bottom:1rem;">
+            <h2 style="color:white; font-size:1.3rem;">🖴 Device/File Selection</h2>
+        </div>
+    """, unsafe_allow_html=True)
+    # Target type selection
+    target_type = st.radio(
+        "Test Target Type:",
+        options=["Block Device", "File(s) or Path(s)"],
+        index=0,
+        help="Choose whether to test on block devices or files/paths."
+    )
+    # Default device_count for first load
+    if 'device_count' not in st.session_state:
+        st.session_state.device_count = 4
+    device_count = st.session_state.device_count
+    if target_type == "Block Device":
+        available_devices = discover_nvme_devices()
+        if available_devices:
+            selected_devices = st.multiselect(
+                "Select NVMe devices to test:",
+                options=available_devices,
+                default=available_devices[:device_count],
+                help="Auto-discovered NVMe devices."
+            )
+            # If user changes selection, update device_count
+            device_count = len(selected_devices)
+            st.session_state.device_count = device_count
+            VF_DEVICES = selected_devices
+            VF_COUNT = device_count
+            VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
+        else:
+            st.warning("No NVMe devices found. Please enter device paths manually.")
+            manual_devices = st.text_area(
+                "Enter device paths (comma-separated):",
+                value=", ".join([f"/tmp/nvme0n{2+i}" for i in range(device_count)]),
+                help="No devices auto-discovered. Enter paths manually."
+            )
+            VF_DEVICES = [d.strip() for d in manual_devices.split(",") if d.strip()]
+            VF_COUNT = len(VF_DEVICES)
+            st.session_state.device_count = VF_COUNT
+            VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
+        vf_labels = [f"VF{i}" for i in range(VF_COUNT)]
+        file_mode = False
+    else:
+        file_targets = st.text_area(
+            "Enter file(s) or path(s) to test (comma or newline separated):",
+            value="/tmp/testfile0, /tmp/testfile1",
+            help="Enter one or more file or folder paths."
+        )
+        # Support both comma and newline separation
+        raw_targets = file_targets.replace("\n", ",").split(",")
+        VF_DEVICES = [d.strip() for d in raw_targets if d.strip()]
+        VF_COUNT = len(VF_DEVICES)
+        st.session_state.device_count = VF_COUNT
+        VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
+        vf_labels = [f"Target {i}" for i in range(VF_COUNT)]
+        file_mode = True
+        # File size input for file mode
+        if 'file_size' not in st.session_state:
+            st.session_state.file_size = '10G'
+        st.session_state.file_size = st.text_input(
+            "File size for each target (e.g. 10G, 100M):",
+            value=st.session_state.file_size,
+            help="Required for file/path mode. FIO will create or use files of this size."
+        )
+        # Pre-fill size input
+        if 'prefill_size' not in st.session_state:
+            st.session_state.prefill_size = st.session_state.file_size
+        st.session_state.prefill_size = st.text_input(
+            "Pre-fill file size (for pre-fill step):",
+            value=st.session_state.prefill_size,
+            help="Size to use when pre-filling files. Should match or exceed test file size."
+        )
+        # Pre-fill command preview and confirmation
+        prefill_cmds = []
+        for dev in VF_DEVICES:
+            prefill_cmd = [
+                "sudo", "fio",
+                f"--filename={dev}",
+                f"--size={st.session_state.prefill_size}",
+                "--rw=write",
+                f"--bs={st.session_state.fio_config.get('bs', '128k')}",
+                "--ioengine=libaio",
+                f"--iodepth={st.session_state.fio_config.get('iodepth', 64)}",
+                "--runtime=60",
+                f"--numjobs={st.session_state.fio_config.get('numjobs', 4)}",
+                "--time_based",
+                "--group_reporting",
+                "--name=pre-fill"
+            ]
+            prefill_cmds.append(prefill_cmd)
+        st.markdown("**Pre-fill FIO command(s) to be run:**")
+        for cmd in prefill_cmds:
+            st.code(' '.join(cmd))
+        if st.button("Confirm and Run Pre-fill"):
+            import subprocess
+            for cmd, dev in zip(prefill_cmds, VF_DEVICES):
+                st.sidebar.info(f"Pre-filling {dev} with size {st.session_state.prefill_size} ...")
+                try:
+                    subprocess.run(cmd, check=True)
+                    st.sidebar.success(f"Pre-fill complete for {dev}")
+                except Exception as e:
+                    st.sidebar.error(f"Pre-fill failed for {dev}: {e}")
+
+    st.markdown("---")
+    st.markdown("""
+        <div style="text-align:center; margin-bottom:1rem;">
+            <h2 style="color:white; font-size:1.3rem;">⚡ FIO Presets</h2>
+        </div>
+    """, unsafe_allow_html=True)
+    if 'fio_config' not in st.session_state:
+        st.session_state.fio_config = {
+            'rw': 'randread',
+            'bs': '128k',
+            'iodepth': 64,
+            'numjobs': 4,
+            'runtime': 10
+        }
+    preset_col1, preset_col2 = st.columns(2)
+    with preset_col1:
+        if st.button("4K Random Read"):
+            st.session_state.fio_config.update({'rw': 'randread', 'bs': '4k', 'iodepth': 64, 'numjobs': 4})
+        if st.button("128K Seq Write"):
+            st.session_state.fio_config.update({'rw': 'write', 'bs': '128k', 'iodepth': 32, 'numjobs': 2})
+    with preset_col2:
+        if st.button("4K Random Write"):
+            st.session_state.fio_config.update({'rw': 'randwrite', 'bs': '4k', 'iodepth': 64, 'numjobs': 4})
+        if st.button("128K Seq Read"):
+            st.session_state.fio_config.update({'rw': 'read', 'bs': '128k', 'iodepth': 32, 'numjobs': 2})
+    st.markdown("---")
+    with st.expander("❓ Help / Info", expanded=False):
+        st.markdown("""
+        **How to use this dashboard:**
+        - Select NVMe devices to test (auto-discovered or manual).
+        - Choose a preset or customize FIO parameters.
+        - Use the controls above to start, pause, or resume benchmarking.
+        - View results in the main area. Export or compare as needed.
+        - For best results, ensure FIO and device permissions are set up.
+        """)
 
     st.markdown("---")
     st.markdown("""
@@ -185,13 +356,6 @@ with st.sidebar:
     with col3:
         if st.button("\u23ef\ufe0f Resume"):
             st.session_state.paused = False
-
-    # --- Sidebar: Device Count Input ---
-    device_count = st.number_input("How many devices to test?", min_value=1, max_value=32, value=4, step=1, help="Number of parallel devices to run FIO on.")
-    VF_COUNT = device_count
-    START_IDX = 2  # Start from nvme0n2
-    VF_FILES = [f'vf{i}.json' for i in range(VF_COUNT)]
-    VF_DEVICES = [f"/tmp/nvme0n{START_IDX + i}" for i in range(VF_COUNT)]
 
     # --- Robust Session State Initialization (at the top, after VF_COUNT is set) ---
     if "total_iops" not in st.session_state or len(st.session_state.total_iops) != VF_COUNT:
@@ -236,6 +400,11 @@ with st.sidebar:
             st.success("🚀 Running FIO on all VFs in parallel...")
     else:
         st.info("⏸️ Not running")
+
+    # Add Quit button to sidebar controls
+    st.markdown("---")
+    if st.button("🛑 Quit Dashboard", help="Force stop all FIO runs and halt the dashboard."):
+        st.session_state.quit = True
 
 # Trigger auto-refresh
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
@@ -353,7 +522,7 @@ if any(iops > 0 for iops in current_iops):
         st.session_state.timestamps.pop(0)
 
 # Prepare DataFrames with safe percentage calculation
-vf_labels = [f"VF{i}" for i in range(VF_COUNT)]
+# Replace all uses of vf_labels = [f"VF{i}" for i in range(VF_COUNT)] with the above logic so that labels are correct for both modes.
 total_avg_iops = sum(avg_iops)
 
 # Calculate percentages safely - only if we have valid data
@@ -621,12 +790,12 @@ def run_fio_parallel():
             "sudo", "fio",
             f"--filename={dev}",
             "--direct=1",
-            "--rw=randread",
-            "--bs=128k",
+            f"--rw={st.session_state.fio_config.get('rw', 'randread')}",
+            f"--bs={st.session_state.fio_config.get('bs', '128k')}",
             "--ioengine=libaio",
-            "--iodepth=64",
-            "--runtime=10",
-            "--numjobs=4",
+            f"--iodepth={st.session_state.fio_config.get('iodepth', 64)}",
+            f"--runtime={st.session_state.fio_config.get('runtime', 10)}",
+            f"--numjobs={st.session_state.fio_config.get('numjobs', 4)}",
             "--time_based",
             "--group_reporting",
             "--name=throughput-test-job",
@@ -635,6 +804,8 @@ def run_fio_parallel():
             "--output-format=json",
             f"--output={output_file}"
         ]
+        if 'file_mode' in globals() and file_mode and 'file_size' in st.session_state:
+            fio_cmd.append(f"--size={st.session_state.file_size}")
         p = subprocess.Popen(fio_cmd)
         processes.append(p)
     for p in processes:

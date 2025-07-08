@@ -19,72 +19,38 @@ The purpose of this project is to provide system administrators, engineers, and 
 
 ## Dependencies
 
-Before running the dashboard, ensure you have the following dependencies installed:
+The following dependencies are required to run the dashboard:
 
-- Python 3.8 or later  
-- Streamlit  
-- pandas  
-- plotly  
+- [FIO](https://github.com/axboe/fio) (must be installed and available in your system PATH)
+- Python packages:
+  - streamlit
+  - pandas
+  - plotly
+  - psutil
+  - streamlit-autorefresh
 
-### Install dependencies via pip
+You can install all Python dependencies with:
+
+```bash
+pip install streamlit pandas plotly psutil streamlit-autorefresh
+```
+
+## Using a Local Virtual Environment
+
+If you are using a local Python virtual environment (recommended):
 
 ```bash
 python3 -m venv .venv
-pip install streamlit pandas plotly
-pip install streamlit-autorefresh
-````
+source .venv/bin/activate
+pip install streamlit pandas plotly psutil streamlit-autorefresh
+```
 
-## Project Files
-
-* `dashboard.py`
-  Main Streamlit dashboard script that reads the VF JSON files, computes averaged IOPS, and displays the live updating dashboard with charts and controls.
-
-* `vf0.json`, `vf1.json`, `vf2.json`, `vf3.json`
-  Sample or live JSON files containing NVMe VF performance data, expected to be updated continuously by your NVMe performance monitoring system.
-
-## How to Run
-
-1. Make sure your VF JSON files (`vf0.json` to `vf3.json`) are located in the same directory as `dashboard.py`.
-
-2. Run the dashboard with:
+Then run the dashboard as usual:
 
 ```bash
-streamlit run dashboard.py
+streamlit run gui_dashboard.py
 ```
 
-3. Your default browser will open the dashboard, usually at `http://localhost:8501`.
+## Author
 
-4. Use the slider to adjust the refresh rate (1-10 seconds).
-   You can toggle fullscreen mode via the checkbox.
-
-## Notes
-
-* The dashboard currently supports 4 VFs (`vf0.json` to `vf3.json`).
-* JSON files must follow this structure:
-
-```json
-{
-    "jobs": [
-        {
-            "read": {
-                "iops": <numeric_value>
-            }
-        }
-    ]
-}
-```
-
-* The dashboard runs in a loop with time-based refresh. Ensure your environment allows this.
-* For production, consider running with a process manager or inside Docker.
-
-## Future Improvements
-
-* Alerts or notifications for performance anomalies
-* Support dynamic number of VFs
-* UI enhancements with animations or themes
-* Integration with real NVMe monitoring tools
-
-## License
-Author: Bean Huo <beanhuo@micron.com>
-
-
+Bean Huo <beanhuo@micron.com>
